@@ -134,10 +134,24 @@ class Client:
         response = self.receive_socket(self.buffer_size).decode()
         return response == "HASH_OK"
 
+    def send_execution_instruction(self):
+        if not self.send_socket("EXECUTE".encode()):
+            print("Failed to send EXECUTE instruction, aborting.")
+            return
+
+        while True:
+            data = self.receive_socket(self.buffer_size).decode()
+            if data == "END_EXECUTION":
+                break
+            print(data)
+
+        print("Execution completed.")
+
 
 if __name__ == "__main__":
-    client = Client()
-    file = "dummyData.bin"
+    client = Client(port=12346)
+    file = "test.sh"
     file_path = os.path.join(os.path.dirname(__file__), file)
 
     client.send_file(file_path)
+    client.send_execution_instruction()

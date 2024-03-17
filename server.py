@@ -1,4 +1,5 @@
 import socket
+import subprocess
 import zlib
 import hashlib
 import os
@@ -57,6 +58,12 @@ class Server:
 
         print(f"File {file_name} received and saved successfully.")
 
+        # CLOSE or EXECUTE
+
+        action = client_socket.recv(self.buffer_size).decode()
+        if action == "EXECUTE":
+            self.execution_protocol(client_socket, file_name)
+
     def receive_metadata(self, client_socket):
         metadata = client_socket.recv(self.buffer_size).decode()
         if not metadata:
@@ -90,7 +97,31 @@ class Server:
         with open(file_path, "wb") as file:
             file.write(zlib.decompress(file_data))
 
+    def run_file(self, client_socket, file_path):
+        try:
+            os.chmod(file_path, 0o755)
+            process = subprocess.Popen(
+                file_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            while process.poll() is None:
+                output = process.stdout.readline()
+                client_socket.sendall(output)
+        except Exception as e:
+            print(f"Error running file: {e}")
+        finally:
+            client_socket.sendall("END_EXECUTION".encode())
+
+    def execution_protocol(self, client_socket, file_name):
+        print(f"Executing file {file_name}...")
+
+        file_path = os.path.join(self.save_path, file_name)
+
+        if not os.path.exists(file_path):
+            return
+
+        self.run_file(client_socket, file_path)
+
 
 if __name__ == "__main__":
-    server = Server()
+    server = Server(port=12346)
     server.start()
