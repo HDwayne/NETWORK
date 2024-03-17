@@ -1,0 +1,10 @@
+layout {
+    pane split_direction="vertical" {
+        pane command="python3" {
+	     args "client.py"
+	}
+        pane command="python3" {
+	     args "server.py"
+	}
+    }
+}
