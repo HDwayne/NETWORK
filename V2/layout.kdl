@@ -1,0 +1,10 @@
+layout {
+    pane split_direction="vertical" {
+        pane command="python3" {
+	     args "app.py" "--host" "localhost" "--port" "12345" "--mode" "server"
+	}
+        pane command="python3" {
+	     args "app.py" "--host" "localhost" "--port" "12345" "--mode" "client" "--upload" "./dummyData.bin"
+	}
+    }
+}
