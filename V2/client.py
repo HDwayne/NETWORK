@@ -13,8 +13,12 @@ class Client:
         self.segment_size = segment_size
         
         self._sock = None
-        self._last_ack_received = 0
+        self._current_base = None
         self._transmission_status = "NOT_STARTED" # NOT_STARTED, IN_PROGRESS, SUCCESS, FAILED, ERROR
+        self._segments_to_send = None
+        self.timeout = 2
+        self.retransmission_in_progress = False
+        self.retransmission_lock = threading.Lock()
 
         self._connect()
 
@@ -25,26 +29,37 @@ class Client:
         threading.Thread(target=self._listen_server, daemon=True).start()
         
         self._send_upload(file_path)
-
+        
         with open(file_path, 'rb') as file:
             segments = file.read()
-
-        segments_to_send = [segments[i:i+self.segment_size] for i in range(0, len(segments), self.segment_size)]
-
+        
+        self._segments_to_send = [segments[i:i+self.segment_size] for i in range(0, len(segments), self.segment_size)]
+        
+        self._current_base = 0
         seq_num = 0
-        while seq_num < len(segments_to_send):
-            if seq_num < self._last_ack_received + self.window_size:
-                self._send_data(segments_to_send[seq_num], seq_num)
-                seq_num += 1
-            else:
-                time.sleep(0.1)
+        while seq_num < len(self._segments_to_send):
+            with self.retransmission_lock:
+                if not self.retransmission_in_progress and seq_num <= self._current_base + self.window_size - 1:
+                    self._send_data(self._segments_to_send[seq_num], seq_num)
+                    seq_num += 1
+                    setattr(self, f"_timer_{seq_num}", threading.Timer(self.timeout, self._check_timeout, args=(seq_num,)))
+                    getattr(self, f"_timer_{seq_num}").start()
 
-        self._send_eof()
-
-        while self._transmission_status == "IN_PROGRESS":
+        # Attendre que tous les ACKs soient reçus avant de conclure
+        while self._current_base < len(self._segments_to_send) - 1:
             time.sleep(0.1)
 
+        self._send_eof()
+        
+        while self._transmission_status == "IN_PROGRESS":
+            time.sleep(0.1)
+        self._segments_to_send = None
         print(f"Transmission status: {self._transmission_status}")
+        
+        # Annuler tous les timers restants
+        for i in range(seq_num):
+            if hasattr(self, f"_timer_{i}"):
+                getattr(self, f"_timer_{i}").cancel()
 
     # ---------------------------- PRIVATE METHODS -----------------------------
     
@@ -95,7 +110,19 @@ class Client:
         return sha256_hash.hexdigest()
 
     # ---------------------------- THREADS -------------------------------------
-      
+
+    def _check_timeout(self, seq_num):
+        with self.retransmission_lock:
+            if seq_num > self._current_base and not self.retransmission_in_progress:
+                self.retransmission_in_progress = True
+                print(f"Timeout detected for segment {seq_num}, initiating retransmission from base {self._current_base}.")
+                for seq_num in range(self._current_base, self._current_base + self.window_size):
+                    self._send_data(self._segments_to_send[seq_num], seq_num)
+                    # Restart timer
+                    setattr(self, f"_timer_{seq_num}", threading.Timer(self.timeout, self._check_timeout, args=(seq_num,)))
+                    getattr(self, f"_timer_{seq_num}").start()
+                self.retransmission_in_progress = False
+
     def _listen_server(self):
         while True:
             try:
@@ -105,12 +132,18 @@ class Client:
                     data = self._sock.recv(message_length)
                     if data:
                         ack_message = Message.deserialize(data)
-                        if ack_message.type == 'ACK': 
+                        if ack_message.type == 'ACK':
+                            if hasattr(self, f"_timer_{ack_message.sequence_num}"):
+                                getattr(self, f"_timer_{ack_message.sequence_num}").cancel()
+                                delattr(self, f"_timer_{ack_message.sequence_num}")
+
                             print(f"[Server] ACK for segment {ack_message.sequence_num}")
-                            self._last_ack_received = max(self._last_ack_received, ack_message.sequence_num)
+                            self._current_base = max(self._current_base, ack_message.sequence_num + 1)
+                            # with self.retransmission_lock:
+                            #     self.retransmission_in_progress = False
                         elif ack_message.type == 'NACK':
                             print(f"[Server] NACK for segment {ack_message.sequence_num} : {ack_message.content}")
-                            self._last_ack_received = ack_message.sequence_num
+                            self._current_base = ack_message.sequence_num - 1
                         elif ack_message.type == 'EOF_ACK':
                             print("[Server] EOF ACK")
                             self._transmission_status = "SUCCESS"

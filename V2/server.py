@@ -15,7 +15,7 @@ class ClientSession:
 
 class Server:
 
-    def __init__(self, host, port, files_directory="./files", drop_test=False, drop_test_probability=0.1):
+    def __init__(self, host, port, files_directory="./files", drop_test=False, drop_test_probability=0.05):
         self.host = host
         self.port = port
         self.FILES_DIRECTORY = files_directory
