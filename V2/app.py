@@ -29,6 +29,14 @@ def main():
         server.start()
     else:
         client = Client(args.host, args.port)
-        client.send_file(args.upload)
+        while True:
+            command = input("Enter a command: ")
+            if command == "exit":
+                break
+            elif command == "list":
+                client.request_list()
+            elif command.startswith("upload"):
+                file_path = command.split(" ")[1]
+                client.send_file(file_path)
 if __name__ == "__main__":
     main()

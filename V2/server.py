@@ -66,8 +66,18 @@ class Server:
             self._handle_data(client_socket, message, session_state)
         elif message.type == "EOF" and session_state.is_uploading:
             self._handle_eof(client_socket, message, session_state)
+        elif message.type == "LIST":
+            self._handle_list(client_socket)
         else:
             print(f"[Server-Client] Invalid message type: {message.type}")
+
+    def _handle_list(self, client_socket):
+        if not os.path.exists(self.FILES_DIRECTORY):
+            os.makedirs(self.FILES_DIRECTORY)
+        files = os.listdir(self.FILES_DIRECTORY)
+        files_message = Message("LIST_RESPONSE", 0, files)
+        self._send_message(client_socket, files_message)
+        print("[Server-Client] Sending list of files.")
 
     def _handle_upload(self, session_state, message):
         session_state.is_uploading = True
@@ -112,7 +122,6 @@ class Server:
         
         self._send_message(client_socket, ack_message)
         session_state.is_uploading = False
-
 
     def _send_message(self, socket, message):
         serialized_message = message.serialize()
