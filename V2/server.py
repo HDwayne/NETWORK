@@ -2,9 +2,9 @@ import hashlib
 import threading
 import socket
 import os
-import time
 from message import Message
 import random
+
 class ClientSession:
     def __init__(self):
         self.is_uploading = False
@@ -23,9 +23,6 @@ class Server:
         self.drop_test = drop_test
         self.drop_test_probability = drop_test_probability
 
-        if not os.path.exists(self.FILES_DIRECTORY):
-            os.makedirs(self.FILES_DIRECTORY)
-    
     # ---------------------------- PUBLIC METHODS ------------------------------
 
     def start(self):
@@ -47,12 +44,15 @@ class Server:
 
         try:
             while True:
-                message_length_bytes = client_socket.recv(4)
-                if message_length_bytes:
-                    data_length = int.from_bytes(message_length_bytes, byteorder='big')
-                    data = client_socket.recv(data_length)
-                    message = Message.deserialize(data)
-                    self._process_message(client_socket, message, session_state)
+                try:
+                    message_length_bytes = client_socket.recv(4)
+                    if message_length_bytes:
+                        data_length = int.from_bytes(message_length_bytes, byteorder='big')
+                        data = client_socket.recv(data_length)
+                        message = Message.deserialize(data)
+                        self._process_message(client_socket, message, session_state)
+                except Exception as e:
+                    print(f"[Server-Client] Message receive with malformed data.")
         except Exception as e:
             print(f"[Server-Client] Error : {e}")
         finally:
@@ -75,26 +75,19 @@ class Server:
         session_state.expected_hash = message.content["file_hash"]
         session_state.file_data_buffer.clear()
         session_state.num_expected_acks = 0
+
         print(f"[Server-Client] Receiving file: {session_state.file_name}")
     
     def _handle_data(self, client_socket, message, session_state):
         if message.sequence_num != session_state.num_expected_acks:
             return
 
-        received_data = message.content
-        calculated_hash = hashlib.sha256(received_data).hexdigest()
-
-        # randomly drop packets to simulate packet loss
         if self.drop_test and random.random() < self.drop_test_probability:
             print(f"[Server-Client] Dropped packet {message.sequence_num}.")
             return
         
-        if calculated_hash != message.hash:
-            nack_message = Message("NACK", message.sequence_num, "Hash mismatch")
-            self._send_message(client_socket, nack_message)
-            print(f"[Server-Client] NACK {message.sequence_num} : Mismatch in data hash.")
-        else:
-            session_state.file_data_buffer.extend(received_data)
+        if message.hash == hashlib.sha256(message.content).hexdigest():
+            session_state.file_data_buffer.extend(message.content)
             session_state.num_expected_acks += 1
             ack_message = Message("ACK", message.sequence_num)
             self._send_message(client_socket, ack_message)
@@ -104,7 +97,11 @@ class Server:
         received_file_hash = hashlib.sha256(session_state.file_data_buffer).hexdigest()
         
         if received_file_hash == session_state.expected_hash:
+            if not os.path.exists(self.FILES_DIRECTORY):
+                os.makedirs(self.FILES_DIRECTORY)
             file_path = os.path.join(self.FILES_DIRECTORY, session_state.file_name)
+            if os.path.exists(file_path):
+                os.remove(file_path)
             with open(file_path, "wb") as file:
                 file.write(session_state.file_data_buffer)
             print("[Server-Client] EOF_ACK File transfer complete with hash verification.")
@@ -115,6 +112,7 @@ class Server:
         
         self._send_message(client_socket, ack_message)
         session_state.is_uploading = False
+
 
     def _send_message(self, socket, message):
         serialized_message = message.serialize()

@@ -12,6 +12,7 @@ def parse_arguments():
     parser.add_argument("--upload", type=str, help="Chemin du fichier à uploader (client uniquement)")
     parser.add_argument("--window-size", type=int, help="Taille de la fenêtre de transmission (client uniquement)")
     parser.add_argument("--segment-size", type=int, help="Taille des segments de données (client uniquement)")
+    parser.add_argument("--timeout", type=float, help="Délai d'attente avant retransmission (client uniquement)")
 
     #server arguments
     parser.add_argument("--files-directory", type=str, help="Répertoire des fichiers (server uniquement)")
