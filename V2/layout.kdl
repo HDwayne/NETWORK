@@ -4,7 +4,7 @@ layout {
 	     args "app.py" "--host" "localhost" "--port" "12345" "--mode" "server" "--drop-test-probability" "0.05" "--drop-test"
 	}
         pane command="python3" {
-	     args "app.py" "--host" "localhost" "--port" "12345" "--mode" "client" "--upload" "./dummyData.bin"
+	     args "app.py" "--host" "localhost" "--port" "12345" "--mode" "client"
 	}
     }
 }
