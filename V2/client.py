@@ -191,14 +191,16 @@ class Client:
                     break
 
     class FileExecutionProtocol:
-        def __init__(self, client, serverMACAddress, connection_mode="WIFI"):
+        def __init__(self, client, connection_mode="WIFI"):
             self.client = client
             self._sock = None
             self._connection_mode = connection_mode  # BLUETOOTH or WIFI
 
         def _connect(self):
             if self._connection_mode == "BLUETOOTH":
-                self._sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM)
+                self._sock = socket.socket(
+                    socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
+                )
             else:
                 self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             for attempt in range(5):
