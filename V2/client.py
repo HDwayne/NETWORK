@@ -296,7 +296,7 @@ class Client:
         self.FileTransmissionProtocol(self).send_file(file_path)
         self._disconnect()
 
-    def execute_file(self, file_name, serverMACAddress, connection_mode):
+    def execute_file(self, file_name, connection_mode):
         self.FileExecutionProtocol(self, connection_mode=connection_mode).execute_file(
             file_name
         )

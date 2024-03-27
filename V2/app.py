@@ -81,7 +81,7 @@ def main():
             elif command.startswith("execute"):
                 file_name = command.split(" ")[1]
                 mode = input("Enter the mode (WIFI or BLUETOOTH): ")
-                client.execute_file(file_name, mac_address, mode)
+                client.execute_file(file_name, mode)
 
 
 if __name__ == "__main__":
