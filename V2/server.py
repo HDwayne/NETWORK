@@ -7,7 +7,8 @@ import random
 
 
 class ClientSession:
-    def __init__(self):
+    def __init__(self, client_socket):
+        self.socket = client_socket
         self.is_uploading = False
         self.file_name = None
         self.expected_hash = None
@@ -44,115 +45,119 @@ class Server:
                 client_socket, address = server_socket.accept()
                 print(f"[Server-Client] Connection from {address}")
                 client_thread = threading.Thread(
-                    target=self._handle_client, args=(client_socket,)
+                    target=self._handle_client, args=(ClientSession(client_socket),)
                 )
                 client_thread.start()
 
     # ---------------------------- PRIVATE METHODS -----------------------------
 
-    def _handle_client(self, client_socket):
-        session_state = ClientSession()
-
+    def _handle_client(self, session):
+        buffer = b""
         try:
             while True:
-                try:
-                    message_length_bytes = client_socket.recv(4)
-                    if message_length_bytes:
-                        data_length = int.from_bytes(
-                            message_length_bytes, byteorder="big"
-                        )
-                        data = client_socket.recv(data_length)
-                        message = Message.deserialize(data)
-                        self._process_message(client_socket, message, session_state)
-                except Exception as e:
-                    print(f"[Server-Client] Message receive with malformed data.")
+                data = session.socket.recv(2048)
+                if not data:
+                    break  # Connexion fermée par le client
+                buffer += data
+
+                while len(buffer) >= 4:
+                    # Longueur du message attendu
+                    message_length = int.from_bytes(buffer[:4], byteorder="big")
+                    if len(buffer) - 4 >= message_length:
+                        # Message complet reçu
+                        message_data = buffer[4 : 4 + message_length]
+                        buffer = buffer[4 + message_length :]
+
+                        message = Message.deserialize(message_data)
+                        self._process_message(message, session)
+                    else:
+                        break  # Attend plus de données
         except Exception as e:
-            print(f"[Server-Client] Error : {e}")
+            print(f"[Server-Client] Error: {e}")
         finally:
             print("[Server-Client] Client disconnected")
-            client_socket.close()
+            session.socket.close()
 
-    def _process_message(self, client_socket, message, session_state):
-        if message.type == "UPLOAD" and not session_state.is_uploading:
-            self._handle_upload(session_state, message)
-        elif message.type == "DATA" and session_state.is_uploading:
-            self._handle_data(client_socket, message, session_state)
-        elif message.type == "EOF" and session_state.is_uploading:
-            self._handle_eof(client_socket, message, session_state)
-        elif message.type == "LIST":
-            self._handle_list(client_socket)
-        elif message.type == "EXECUTE":
-            self._handle_execute(client_socket, message)
+    def _process_message(self, message, session):
+        if message.type == "UPLOAD" and not session.is_uploading:
+            self._handle_upload(session, message)
+        elif message.type == "DATA" and session.is_uploading:
+            self._handle_data(message, session)
+        elif message.type == "EOF" and session.is_uploading:
+            self._handle_eof(message, session)
+        # elif message.type == "LIST":
+        #     self._handle_list(session)
+        # elif message.type == "EXECUTE":
+        #     self._handle_execute(message, session)
         else:
             print(f"[Server-Client] Invalid message type: {message.type}")
 
-    def _handle_list(self, client_socket):
-        if not os.path.exists(self.FILES_DIRECTORY):
-            os.makedirs(self.FILES_DIRECTORY)
-        files = os.listdir(self.FILES_DIRECTORY)
-        files_message = Message("LIST_RESPONSE", 0, files)
-        self._send_message(client_socket, files_message)
-        print("[Server-Client] Sending list of files.")
+    # ---------------------------- FileTransmissionProtocol --------------------
 
-    def _handle_upload(self, session_state, message):
-        session_state.is_uploading = True
-        session_state.file_name = message.content["file_name"]
-        session_state.expected_hash = message.content["file_hash"]
-        session_state.file_data_buffer.clear()
-        session_state.num_expected_acks = 0
+    def _handle_upload(self, session, message):
+        session.is_uploading = True
+        session.file_name = message.content["file_name"]
+        session.expected_hash = message.content["file_hash"]
+        session.file_data_buffer.clear()
+        session.num_expected_acks = 0
 
-        print(f"[Server-Client] Receiving file: {session_state.file_name}")
+        print(f"[FileTransmissionProtocol] Receiving file: {session.file_name}")
 
-    def _handle_data(self, client_socket, message, session_state):
-        if message.sequence_num != session_state.num_expected_acks:
+    def _handle_data(self, message, session):
+        if message.sequence_num != session.num_expected_acks:
             return
 
         if self.drop_test and random.random() < self.drop_test_probability:
-            print(f"[Server-Client] Dropped packet {message.sequence_num}.")
+            print(f"[FileTransmissionProtocol] Dropped packet {message.sequence_num}.")
             return
 
         if message.hash == hashlib.sha256(message.content).hexdigest():
-            session_state.file_data_buffer.extend(message.content)
-            session_state.num_expected_acks += 1
-            ack_message = Message("ACK", message.sequence_num)
-            self._send_message(client_socket, ack_message)
-            print(f"[Server-Client] ACK {message.sequence_num}.")
+            session.file_data_buffer.extend(message.content)
+            session.num_expected_acks += 1
+            Message("ACK", message.sequence_num).send(session.socket)
+            print(f"[FileTransmissionProtocol] ACK {message.sequence_num}.")
 
-    def _handle_eof(self, client_socket, message, session_state):
-        received_file_hash = hashlib.sha256(session_state.file_data_buffer).hexdigest()
+    def _handle_eof(self, message, session):
+        received_file_hash = hashlib.sha256(session.file_data_buffer).hexdigest()
 
-        if received_file_hash == session_state.expected_hash:
+        if received_file_hash == session.expected_hash:
             if not os.path.exists(self.FILES_DIRECTORY):
                 os.makedirs(self.FILES_DIRECTORY)
-            file_path = os.path.join(self.FILES_DIRECTORY, session_state.file_name)
+            file_path = os.path.join(self.FILES_DIRECTORY, session.file_name)
             if os.path.exists(file_path):
                 os.remove(file_path)
             with open(file_path, "wb") as file:
-                file.write(session_state.file_data_buffer)
+                file.write(session.file_data_buffer)
             print(
-                "[Server-Client] EOF_ACK File transfer complete with hash verification."
+                "[FileTransmissionProtocol] EOF_ACK File transfer complete with hash verification."
             )
-            ack_message = Message("EOF_ACK", message.sequence_num)
+            Message("EOF_ACK", message.sequence_num).send(session.socket)
         else:
-            print("[Server-Client] EOF_NACK Hash mismatch.")
-            ack_message = Message(
+            print("[FileTransmissionProtocol] EOF_NACK Hash mismatch.")
+            Message(
                 "EOF_NACK", message.sequence_num, "EOF received. Hash mismatch."
-            )
+            ).send(session.socket)
 
-        self._send_message(client_socket, ack_message)
-        session_state.is_uploading = False
+        session.is_uploading = False
 
-    def _handle_execute(self, client_socket, message):
-        file_name = message.content["file_name"]
-        file_path = os.path.join(self.FILES_DIRECTORY, file_name)
-        if os.path.exists(file_path):
-            execute_message = Message("EXECUTE_OK", 0, file_name)
-        else:
-            execute_message = Message("EXECUTE_KO", 0, "File not found.")
-        self._send_message(client_socket, execute_message)
-        print(f"[Server-Client] Sending file {file_name} to client.")
+    # ---------------------------- FileListRequestProtocol ---------------------
 
-    def _send_message(self, socket, message):
-        serialized_message = message.serialize()
-        message_length = len(serialized_message).to_bytes(4, byteorder="big")
-        socket.send(message_length + serialized_message)
+    # def _handle_list(self, client_socket):
+    #     if not os.path.exists(self.FILES_DIRECTORY):
+    #         os.makedirs(self.FILES_DIRECTORY)
+    #     files = os.listdir(self.FILES_DIRECTORY)
+    #     files_message = Message("LIST_RESPONSE", 0, files)
+    #     self._send_message(client_socket, files_message)
+    #     print("[Server-Client] Sending list of files.")
+
+    # ---------------------------- FileExecutionProtocol -----------------------
+
+    # def _handle_execute(self, client_socket, message):
+    #     file_name = message.content["file_name"]
+    #     file_path = os.path.join(self.FILES_DIRECTORY, file_name)
+    #     if os.path.exists(file_path):
+    #         execute_message = Message("EXECUTE_OK", 0, file_name)
+    #     else:
+    #         execute_message = Message("EXECUTE_KO", 0, "File not found.")
+    #     self._send_message(client_socket, execute_message)
+    #     print(f"[Server-Client] Sending file {file_name} to client.")

@@ -1,5 +1,6 @@
-import json
 import base64
+import json
+
 
 class Message:
     def __init__(self, type, sequence_num=None, content=None, hash=None):
@@ -10,29 +11,34 @@ class Message:
 
     def serialize(self):
         if isinstance(self.content, bytes):
-            content_encoded = base64.b64encode(self.content).decode('utf-8')
+            content_encoded = base64.b64encode(self.content).decode("utf-8")
         else:
             content_encoded = self.content
 
         message_data = {
-            'type': self.type,
-            'sequence_num': self.sequence_num,
-            'content': content_encoded,
+            "type": self.type,
+            "sequence_num": self.sequence_num,
+            "content": content_encoded,
+            "hash": self.hash,
         }
-        
-        if self.hash is not None:
-            message_data['hash'] = self.hash
 
-        return json.dumps(message_data).encode('utf-8')
+        serialized_data = json.dumps(message_data).encode("utf-8")
+        length_prefix = len(serialized_data).to_bytes(4, byteorder="big")
+
+        return length_prefix + serialized_data
 
     @staticmethod
     def deserialize(data):
-        obj = json.loads(data.decode('utf-8'))
-        content_decoded = obj['content']
+        obj = json.loads(data.decode("utf-8"))
+        content_decoded = obj["content"]
 
-        # Décodage du contenu de Base64 uniquement pour les types de messages où c'est attendu
-        if content_decoded is not None and obj['type'] == 'DATA':
+        if content_decoded is not None and obj["type"] == "DATA":
             content_decoded = base64.b64decode(content_decoded)
 
-        # Création de l'instance Message avec ou sans hash
-        return Message(obj['type'], obj.get('sequence_num', 0), content_decoded, obj.get('hash'))
+        return Message(
+            obj["type"], obj.get("sequence_num"), content_decoded, obj.get("hash")
+        )
+
+    def send(self, socket):
+        serialized_message = self.serialize()
+        socket.send(serialized_message)
