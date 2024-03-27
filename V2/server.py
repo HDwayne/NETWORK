@@ -85,8 +85,8 @@ class Server:
             self._handle_data(message, session)
         elif message.type == "EOF" and session.is_uploading:
             self._handle_eof(message, session)
-        # elif message.type == "EXECUTE":
-        #     self._handle_execute(message, session)
+        elif message.type == "EXECUTE":
+            self._handle_execute(message, session)
         else:
             print(f"[Server-Client] Invalid message type: {message.type}")
 
@@ -140,12 +140,20 @@ class Server:
 
     # ---------------------------- FileExecutionProtocol -----------------------
 
-    # def _handle_execute(self, client_socket, message):
-    #     file_name = message.content["file_name"]
-    #     file_path = os.path.join(self.FILES_DIRECTORY, file_name)
-    #     if os.path.exists(file_path):
-    #         execute_message = Message("EXECUTE_OK", 0, file_name)
-    #     else:
-    #         execute_message = Message("EXECUTE_KO", 0, "File not found.")
-    #     self._send_message(client_socket, execute_message)
-    #     print(f"[Server-Client] Sending file {file_name} to client.")
+    def _handle_execute(self, message, session):
+        Message("EXECUTE_ACK").send(session.socket)
+
+        file_path = os.path.join(self.FILES_DIRECTORY, message.content["file_name"])
+        if not os.path.exists(file_path):
+            print(f"[FileExecutionProtocol] File not found: {file_path}")
+            Message(
+                "EXECUTE_ERROR",
+                content=f"File not found: {message.content['file_name']}",
+            ).send(session.socket)
+            return
+
+        # here we execute the file
+
+        Message("EXECUTE_RESULT", content="File executed successfully.").send(
+            session.socket
+        )

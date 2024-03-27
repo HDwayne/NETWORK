@@ -3,7 +3,7 @@ import json
 
 
 class Message:
-    def __init__(self, type, sequence_num=None, content=None, hash=None):
+    def __init__(self, type, sequence_num=0, content=None, hash=None):
         self.type = type
         self.sequence_num = sequence_num
         self.content = content

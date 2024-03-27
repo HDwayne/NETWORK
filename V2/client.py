@@ -189,78 +189,96 @@ class Client:
                     print(f"Error listening for messages: {e}")
                     break
 
-    # class FileExecutionProtocol:
-    #     def __init__(self, client):
-    #         self.client = client
-    #         self._sock = None
+    class FileExecutionProtocol:
+        def __init__(self, client):
+            self.client = client
+            self._sock = None
 
-    #     def _connect(self):
-    #         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #         for attempt in range(5):
-    #             try:
-    #                 self._sock.connect(
-    #                     (self.client.server_address, self.client.server_port)
-    #                 )
-    #                 print(
-    #                     "[FileExecutionProtocol] Connecté avec succès au serveur pour l'exécution de commandes."
-    #                 )
-    #                 break
-    #             except socket.error as e:
-    #                 print(
-    #                     f"[FileExecutionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
-    #                 )
-    #                 if attempt < 4:
-    #                     time.sleep(2)
-    #                 else:
-    #                     print(
-    #                         "[FileExecutionProtocol] Impossible de se connecter au serveur pour l'exécution de commandes."
-    #                     )
-    #                     exit(1)
+        def _connect(self):
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            for attempt in range(5):
+                try:
+                    self._sock.connect(
+                        (self.client.server_address, self.client.server_port)
+                    )
+                    print(
+                        "[FileExecutionProtocol] Connecté avec succès au serveur pour l'exécution de commandes."
+                    )
+                    break
+                except socket.error as e:
+                    print(
+                        f"[FileExecutionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
+                    )
+                    if attempt < 4:
+                        time.sleep(2)
+                    else:
+                        print(
+                            "[FileExecutionProtocol] Impossible de se connecter au serveur pour l'exécution de commandes."
+                        )
+                        exit(1)
 
-    #     def _disconnect(self):
-    #         if self._sock:
-    #             self._sock.close()
-    #             print(
-    #                 "[FileExecutionProtocol] Déconnecté du serveur pour l'exécution de commandes."
-    #             )
+        def _disconnect(self):
+            if self._sock:
+                self._sock.close()
+                print(
+                    "[FileExecutionProtocol] Déconnecté du serveur pour l'exécution de commandes."
+                )
 
-    #     def _send_message(self, message):
-    #         serialized_message = message.serialize()
-    #         message_length = len(serialized_message).to_bytes(4, byteorder="big")
-    #         self._sock.send(message_length + serialized_message)
+        def execute_file(self, file_name):
+            self._connect()
 
-    #     def execute_file(self, file_name):
-    #         self._connect()
-    #         execution_message = Message("EXECUTE", content={"file_name": file_name})
+            Message("EXECUTE", content={"file_name": file_name}).send(self._sock)
+            print(f"[FileExecutionProtocol] Sent execute message for {file_name}")
 
-    #         self._send_message(execution_message)
-    #         print(f"[EXECUTE] Sent execute command for {file_name}")
+            buffer = b""
+            while True:
+                try:
+                    data = self._sock.recv(2048)
+                    if not data:
+                        break  # La connexion a été fermée
+                    buffer += data
 
-    #         try:
-    #             message_length_bytes = self._sock.recv(4)
-    #             if message_length_bytes:
-    #                 data_length = int.from_bytes(message_length_bytes, byteorder="big")
-    #                 try:
-    #                     data = self._sock.recv(data_length)
-    #                     response_message = Message.deserialize(data)
-    #                     if response_message.type == "EXECUTE_OK":
-    #                         print(
-    #                             f"[EXECUTE] Received execution response: {response_message.content}"
-    #                         )
-    #                     elif response_message.type == "EXECUTE_KO":
-    #                         print(
-    #                             f"[EXECUTE] Received execution response: {response_message.content}"
-    #                         )
-    #                 except Exception as e:
-    #                     print(f"Error deserializing execution response: {e}")
-    #         except Exception as e:
-    #             print(f"Error receiving execution response: {e}")
+                    # Continuez à essayer de traiter les messages tant que vous avez assez de données dans le buffer
+                    while (
+                        len(buffer) >= 4
+                    ):  # Vérifiez si vous avez la longueur du message
+                        message_length = int.from_bytes(buffer[:4], byteorder="big")
 
-    #         self._disconnect()
+                        # Assurez-vous d'avoir reçu le message complet
+                        if len(buffer) - 4 >= message_length:
+                            message_data = buffer[4 : 4 + message_length]
+                            buffer = buffer[
+                                4 + message_length :
+                            ]  # Supprimez les données traitées du buffer
 
-    # def request_list(self):
-    #     protocol = self.FileListRequestProtocol(self)
-    #     protocol.request_list()
+                            message = Message.deserialize(message_data)
+                            if message.type == "EXECUTE_ACK":
+                                print(
+                                    "[FileExecutionProtocol] Request to execute file acknowledged."
+                                )
+                            elif message.type == "EXECUTE_ERROR":
+                                print(
+                                    f"[FileExecutionProtocol] EXECUTE NACK : {message.content}"
+                                )
+                                self._disconnect()
+                                return
+                            elif message.type == "EXECUTE_RESULT":
+                                print(
+                                    f"[FileExecutionProtocol] EXECUTE RESULT : {message.content}"
+                                )
+                                self._disconnect()
+                                return
+                            else:
+                                print(
+                                    f"[FileExecutionProtocol] Invalid message type: {message.type}"
+                                )
+                                self._disconnect()
+                                return
+                        else:
+                            break
+                except Exception as e:
+                    print(f"Error listening for messages: {e}")
+                    break
 
     def send_file(self, file_path):
         if not os.path.exists(file_path):
@@ -270,6 +288,5 @@ class Client:
         self.FileTransmissionProtocol(self).send_file(file_path)
         self._disconnect()
 
-    # def execute_file(self, file_name):
-    #     protocol = self.FileExecutionProtocol(self)
-    #     protocol.execute_file(file_name)
+    def execute_file(self, file_name):
+        self.FileExecutionProtocol(self).execute_file(file_name)
