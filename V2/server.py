@@ -85,8 +85,6 @@ class Server:
             self._handle_data(message, session)
         elif message.type == "EOF" and session.is_uploading:
             self._handle_eof(message, session)
-        # elif message.type == "LIST":
-        #     self._handle_list(session)
         # elif message.type == "EXECUTE":
         #     self._handle_execute(message, session)
         else:
@@ -139,16 +137,6 @@ class Server:
             ).send(session.socket)
 
         session.is_uploading = False
-
-    # ---------------------------- FileListRequestProtocol ---------------------
-
-    # def _handle_list(self, client_socket):
-    #     if not os.path.exists(self.FILES_DIRECTORY):
-    #         os.makedirs(self.FILES_DIRECTORY)
-    #     files = os.listdir(self.FILES_DIRECTORY)
-    #     files_message = Message("LIST_RESPONSE", 0, files)
-    #     self._send_message(client_socket, files_message)
-    #     print("[Server-Client] Sending list of files.")
 
     # ---------------------------- FileExecutionProtocol -----------------------
 
