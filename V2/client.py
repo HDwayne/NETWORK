@@ -7,9 +7,10 @@ from message import Message
 
 
 class Client:
-    def __init__(self, server_address, server_port):
+    def __init__(self, server_address, server_port, mac_address):
         self.server_address = server_address
         self.server_port = server_port
+        self.mac_address = mac_address
         self._socket = None
 
     def _connect(self):
@@ -190,17 +191,24 @@ class Client:
                     break
 
     class FileExecutionProtocol:
-        def __init__(self, client):
+        def __init__(self, client, serverMACAddress, connection_mode="WIFI"):
             self.client = client
             self._sock = None
+            self._connection_mode = connection_mode  # BLUETOOTH or WIFI
 
         def _connect(self):
-            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if self._connection_mode == "BLUETOOTH":
+                self._sock = socket.socket(socket.AF_BLUETOOTH, socket.SOCK_STREAM)
+            else:
+                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             for attempt in range(5):
                 try:
-                    self._sock.connect(
-                        (self.client.server_address, self.client.server_port)
-                    )
+                    if self._connection_mode == "BLUETOOTH":
+                        self._sock.connect((self.client.mac_address, 1))
+                    else:
+                        self._sock.connect(
+                            (self.client.server_address, self.client.server_port)
+                        )
                     print(
                         "[FileExecutionProtocol] Connecté avec succès au serveur pour l'exécution de commandes."
                     )
@@ -288,5 +296,7 @@ class Client:
         self.FileTransmissionProtocol(self).send_file(file_path)
         self._disconnect()
 
-    def execute_file(self, file_name):
-        self.FileExecutionProtocol(self).execute_file(file_name)
+    def execute_file(self, file_name, serverMACAddress, connection_mode):
+        self.FileExecutionProtocol(self, connection_mode=connection_mode).execute_file(
+            file_name
+        )

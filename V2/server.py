@@ -22,12 +22,14 @@ class Server:
         self,
         host,
         port,
+        mac_address,
         files_directory="./files",
         drop_test=False,
         drop_test_probability=0.05,
     ):
         self.host = host
         self.port = port
+        self.mac_address = mac_address
         self.FILES_DIRECTORY = files_directory
 
         self.drop_test = drop_test
@@ -36,6 +38,15 @@ class Server:
     # ---------------------------- PUBLIC METHODS ------------------------------
 
     def start(self):
+        server_blutooth_thread = threading.Thread(target=self._start_bluetooth)
+        server_wifi_thread = threading.Thread(target=self._start_wifi)
+
+        server_blutooth_thread.start()
+        server_wifi_thread.start()
+
+    # ---------------------------- PRIVATE METHODS -----------------------------
+
+    def _start_wifi(self):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
             server_socket.bind((self.host, self.port))
             server_socket.listen()
@@ -49,7 +60,21 @@ class Server:
                 )
                 client_thread.start()
 
-    # ---------------------------- PRIVATE METHODS -----------------------------
+    def _start_bluetooth(self):
+        with socket.socket(
+            socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
+        ) as bluetooth_socket:
+            bluetooth_socket.bind((self.mac_address, 1))
+            bluetooth_socket.listen()
+            print(f"[Server] Server listening on {self.mac_address}:1")
+
+            while True:
+                client_socket, address = bluetooth_socket.accept()
+                print(f"[Server-Client] Connection from {address}")
+                client_thread = threading.Thread(
+                    target=self._handle_client, args=(ClientSession(client_socket),)
+                )
+                client_thread.start()
 
     def _handle_client(self, session):
         buffer = b""

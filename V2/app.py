@@ -14,6 +14,9 @@ def parse_arguments():
     )
     parser.add_argument("--host", type=str, required=True, help="Adresse du serveur")
     parser.add_argument("--port", type=int, required=True, help="Port du serveur")
+    parser.add_argument(
+        "--mac-address", type=str, required=True, help="Adresse MAC du serveur"
+    )
 
     # client arguments
     parser.add_argument(
@@ -59,12 +62,13 @@ def main():
         server = Server(
             args.host,
             args.port,
+            args.mac_address,
             drop_test=args.drop_test,
             drop_test_probability=args.drop_test_probability,
         )
         server.start()
     else:
-        client = Client(args.host, args.port)
+        client = Client(args.host, args.port, args.mac_address)
         while True:
             command = input("Enter a command: ")
             if command == "exit":
@@ -76,7 +80,8 @@ def main():
                 client.send_file(file_path)
             elif command.startswith("execute"):
                 file_name = command.split(" ")[1]
-                client.execute_file(file_name)
+                mode = input("Enter the mode (WIFI or BLUETOOTH): ")
+                client.execute_file(file_name, mac_address, mode)
 
 
 if __name__ == "__main__":
