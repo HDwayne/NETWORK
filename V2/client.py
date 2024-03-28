@@ -4,55 +4,57 @@ import hashlib
 import threading
 import time
 from message import Message
+import argparse
 
 
 class Client:
-    def __init__(self, server_address, server_port, mac_address):
-        self.server_address = server_address
-        self.server_port = server_port
-        self.mac_address = mac_address
-        self._socket = None
-
-    def _connect(self):
-        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        for attempt in range(5):
-            try:
-                self._socket.connect((self.server_address, self.server_port))
-                print(
-                    "[Client] Connecté avec succès au serveur pour le transfert de fichier."
-                )
-                break
-            except socket.error as e:
-                print(
-                    f"[Client] Échec de la connexion au serveur, tentative {attempt + 1}/5"
-                )
-                if attempt < 4:
-                    time.sleep(2)
-                else:
-                    print(
-                        "[Client] Impossible de se connecter au serveur pour le transfert de fichier."
-                    )
-                    exit(1)
-
-    def _disconnect(self):
-        if self._socket:
-            self._socket.close()
-            print("[Client] Déconnecté du serveur de transfert de fichier.")
-
     class FileTransmissionProtocol:
-        def __init__(self, client):
+        def __init__(self, client, window_size, segment_size, timeout):
             self.client = client
+            self._window_size = window_size
+            self._segment_size = segment_size
+            self._timeout = timeout
 
+            self._socket = None
             self._current_base = None
             self._segments_to_send = None
             self._retransmission_in_progress = False
             self._transmission_lock = threading.Lock()
             self._transmission_status = "NOT_STARTED"
-            self._window_size = 10
-            self._segment_size = 2048
-            self._timeout = 0.5
+
+        def _connect(self):
+            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            for attempt in range(5):
+                try:
+                    self._socket.connect(
+                        (self.client.server_address, self.client.server_port)
+                    )
+                    print(
+                        "[FileTransmissionProtocol] Connecté avec succès au serveur pour le transfert de fichier."
+                    )
+                    return True
+                except socket.error as e:
+                    print(
+                        f"[FileTransmissionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
+                    )
+                    if attempt < 4:
+                        time.sleep(2)
+                    else:
+                        print(
+                            "[FileTransmissionProtocol] Impossible de se connecter au serveur pour le transfert de fichier."
+                        )
+                        return False
+
+        def _disconnect(self):
+            if self._socket:
+                self._socket.close()
+                print(
+                    "[FileTransmissionProtocol] Déconnecté du serveur de transfert de fichier."
+                )
 
         def send_file(self, file_path):
+            if not self._connect():
+                return
             self._transmission_status = "IN_PROGRESS"
             threading.Thread(target=self._listen_server, daemon=True).start()
 
@@ -89,18 +91,19 @@ class Client:
 
             self._segments_to_send = None
             print(f"Transmission status: {self._transmission_status}")
+            self._disconnect()
 
         def _send_upload(self, file_path):
             file_name = os.path.basename(file_path)
             file_hash = self._calculate_file_hash(file_path)
             Message(
                 "UPLOAD", content={"file_name": file_name, "file_hash": file_hash}
-            ).send(self.client._socket)
+            ).send(self._socket)
             print(f"[FileTransmissionProtocol] Sent upload message for {file_name}")
 
         def _send_data(self, data, sequence_num):
             data_hash = hashlib.sha256(data).hexdigest()
-            Message("DATA", sequence_num, data, data_hash).send(self.client._socket)
+            Message("DATA", sequence_num, data, data_hash).send(self._socket)
             setattr(
                 self,
                 f"_timer_{sequence_num}",
@@ -112,7 +115,7 @@ class Client:
             print(f"[FileTransmissionProtocol] Sent data segment {sequence_num}")
 
         def _send_eof(self):
-            Message("EOF").send(self.client._socket)
+            Message("EOF").send(self._socket)
             print(f"[FileTransmissionProtocol] Sent EOF segment")
 
         def _calculate_file_hash(self, file_path):
@@ -147,7 +150,7 @@ class Client:
             buffer = b""
             while True:
                 try:
-                    data = self.client._socket.recv(2048)
+                    data = self._socket.recv(2048)
                     if not data:
                         break  # La connexion a été fermée
                     buffer += data
@@ -191,41 +194,45 @@ class Client:
                     break
 
     class FileExecutionProtocol:
-        def __init__(self, client, connection_mode="WIFI"):
+        def __init__(self, client, connection_mode):
             self.client = client
             self._sock = None
             self._connection_mode = connection_mode  # BLUETOOTH or WIFI
 
         def _connect(self):
-            if self._connection_mode == "BLUETOOTH":
-                self._sock = socket.socket(
-                    socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
-                )
-            else:
-                self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            for attempt in range(5):
-                try:
-                    if self._connection_mode == "BLUETOOTH":
-                        self._sock.connect((self.client.mac_address, 1))
-                    else:
-                        self._sock.connect(
-                            (self.client.server_address, self.client.server_port)
-                        )
-                    print(
-                        "[FileExecutionProtocol] Connecté avec succès au serveur pour l'exécution de commandes."
+            try:
+                if self._connection_mode == "BLUETOOTH":
+                    self._sock = socket.socket(
+                        socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
                     )
-                    break
-                except socket.error as e:
-                    print(
-                        f"[FileExecutionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
-                    )
-                    if attempt < 4:
-                        time.sleep(2)
-                    else:
+                else:
+                    self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                for attempt in range(5):
+                    try:
+                        if self._connection_mode == "BLUETOOTH":
+                            self._sock.connect((self.client.mac_address, 1))
+                        else:
+                            self._sock.connect(
+                                (self.client.server_address, self.client.server_port)
+                            )
                         print(
-                            "[FileExecutionProtocol] Impossible de se connecter au serveur pour l'exécution de commandes."
+                            "[FileExecutionProtocol] Connecté avec succès au serveur pour l'exécution de commandes."
                         )
-                        exit(1)
+                        return True
+                    except socket.error as e:
+                        print(
+                            f"[FileExecutionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
+                        )
+                        if attempt < 4:
+                            time.sleep(2)
+                        else:
+                            print(
+                                "[FileExecutionProtocol] Impossible de se connecter au serveur pour l'exécution de commandes."
+                            )
+                            return False
+            except Exception as e:
+                print(f"Error connecting to server: {e}")
+                return False
 
         def _disconnect(self):
             if self._sock:
@@ -235,7 +242,8 @@ class Client:
                 )
 
         def execute_file(self, file_name):
-            self._connect()
+            if not self._connect():
+                return
 
             Message("EXECUTE", content={"file_name": file_name}).send(self._sock)
             print(f"[FileExecutionProtocol] Sent execute message for {file_name}")
@@ -290,15 +298,86 @@ class Client:
                     print(f"Error listening for messages: {e}")
                     break
 
-    def send_file(self, file_path):
-        if not os.path.exists(file_path):
-            print(f"File {file_path} does not exist.")
-            return
-        self._connect()
-        self.FileTransmissionProtocol(self).send_file(file_path)
-        self._disconnect()
+    def __init__(self, server_address, server_port, mac_address):
+        self.server_address = server_address
+        self.server_port = server_port
+        self.mac_address = mac_address
+
+    def send_file(self, file_path, window_size, segment_size, timeout):
+        self.FileTransmissionProtocol(
+            self, window_size, segment_size, timeout
+        ).send_file(file_path)
 
     def execute_file(self, file_name, connection_mode):
         self.FileExecutionProtocol(self, connection_mode=connection_mode).execute_file(
             file_name
         )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Client for file transfer")
+
+    # required arguments
+    parser.add_argument(
+        "--host",
+        type=str,
+        required=True,
+        help="Adresse IP du serveur",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        required=True,
+        help="Port du serveur",
+    )
+    parser.add_argument(
+        "--mac-address",
+        type=str,
+        required=True,
+        help="Adresse MAC du serveur (pour la connexion Bluetooth)",
+    )
+
+    # optional arguments
+    parser.add_argument(
+        "--window-size",
+        type=int,
+        default=10,
+        help="Taille de la fenêtre de transmission",
+    )
+    parser.add_argument(
+        "--segment-size",
+        type=int,
+        default=2048,
+        help="Taille des segments de données",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=2.0,
+        help="Délai d'attente avant retransmission",
+    )
+
+    args = parser.parse_args()
+    client = Client(args.host, args.port, args.mac_address)
+
+    while True:
+        command = input("Enter command: ")
+        if command == "exit":
+            break
+        elif command.startswith("upload"):
+            _, file_path = command.split(" ")
+            if not os.path.exists(file_path):
+                print(f"File {file_path} does not exist.")
+                continue
+            client.send_file(
+                file_path, args.window_size, args.segment_size, args.timeout
+            )
+        elif command.startswith("execute"):
+            _, file_name = command.split(" ")
+            connection_mode = input("Enter connection mode (BLUETOOTH or WIFI): ")
+            if connection_mode not in ["BLUETOOTH", "WIFI"]:
+                print("Invalid connection mode")
+                continue
+            client.execute_file(file_name, connection_mode)
+        else:
+            print("Invalid command")

@@ -4,6 +4,7 @@ import socket
 import os
 from message import Message
 import random
+import argparse
 
 
 class ClientSession:
@@ -17,15 +18,14 @@ class ClientSession:
 
 
 class Server:
-
     def __init__(
         self,
         host,
         port,
         mac_address,
-        files_directory="./files",
-        drop_test=False,
-        drop_test_probability=0.05,
+        files_directory,
+        drop_test,
+        drop_test_probability,
     ):
         self.host = host
         self.port = port
@@ -35,8 +35,6 @@ class Server:
         self.drop_test = drop_test
         self.drop_test_probability = drop_test_probability
 
-    # ---------------------------- PUBLIC METHODS ------------------------------
-
     def start(self):
         server_blutooth_thread = threading.Thread(target=self._start_bluetooth)
         server_wifi_thread = threading.Thread(target=self._start_wifi)
@@ -44,37 +42,43 @@ class Server:
         server_blutooth_thread.start()
         server_wifi_thread.start()
 
-    # ---------------------------- PRIVATE METHODS -----------------------------
-
     def _start_wifi(self):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
-            server_socket.bind((self.host, self.port))
-            server_socket.listen()
-            print(f"[Server] Server listening on {self.host}:{self.port}")
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as server_socket:
+                server_socket.bind((self.host, self.port))
+                server_socket.listen()
+                print(f"[Server WIFI] Server listening on {self.host}:{self.port}")
 
-            while True:
-                client_socket, address = server_socket.accept()
-                print(f"[Server-Client] Connection from {address}")
-                client_thread = threading.Thread(
-                    target=self._handle_client, args=(ClientSession(client_socket),)
-                )
-                client_thread.start()
+                while True:
+                    client_socket, address = server_socket.accept()
+                    print(f"[Server WIFI] Connection from {address}")
+                    client_thread = threading.Thread(
+                        target=self._handle_client, args=(ClientSession(client_socket),)
+                    )
+                    client_thread.start()
+        except OSError as e:
+            print(f"[Server WIFI] Wi-Fi error: {e}")
+            exit(1)
 
     def _start_bluetooth(self):
-        with socket.socket(
-            socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
-        ) as bluetooth_socket:
-            bluetooth_socket.bind((self.mac_address, 1))
-            bluetooth_socket.listen()
-            print(f"[Server] Server listening on {self.mac_address}:1")
+        try:
+            with socket.socket(
+                socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
+            ) as bluetooth_socket:
+                bluetooth_socket.bind((self.mac_address, 1))
+                bluetooth_socket.listen()
+                print(f"[Server BLUETOOTH] Server listening on {self.mac_address}:1")
 
-            while True:
-                client_socket, address = bluetooth_socket.accept()
-                print(f"[Server-Client] Connection from {address}")
-                client_thread = threading.Thread(
-                    target=self._handle_client, args=(ClientSession(client_socket),)
-                )
-                client_thread.start()
+                while True:
+                    client_socket, address = bluetooth_socket.accept()
+                    print(f"[Server BLUETOOTH] Connection from {address}")
+                    client_thread = threading.Thread(
+                        target=self._handle_client, args=(ClientSession(client_socket),)
+                    )
+                    client_thread.start()
+        except OSError as e:
+            print(f"[Server BLUETOOTH] Bluetooth error: {e}")
+            exit(1)
 
     def _handle_client(self, session):
         buffer = b""
@@ -98,9 +102,9 @@ class Server:
                     else:
                         break  # Attend plus de données
         except Exception as e:
-            print(f"[Server-Client] Error: {e}")
+            print(f"[Server Client] Error: {e}")
         finally:
-            print("[Server-Client] Client disconnected")
+            print("[Server Client] Client disconnected")
             session.socket.close()
 
     def _process_message(self, message, session):
@@ -113,7 +117,7 @@ class Server:
         elif message.type == "EXECUTE":
             self._handle_execute(message, session)
         else:
-            print(f"[Server-Client] Invalid message type: {message.type}")
+            print(f"[Server Client] Invalid message type: {message.type}")
 
     # ---------------------------- FileTransmissionProtocol --------------------
 
@@ -182,3 +186,49 @@ class Server:
         Message("EXECUTE_RESULT", content="File executed successfully.").send(
             session.socket
         )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Client de transfert de fichiers.")
+
+    parser.add_argument(
+        "--host",
+        type=str,
+        required=True,
+        help="Adresse du serveur",
+    )
+    parser.add_argument("--port", type=int, required=True, help="Port du serveur")
+    parser.add_argument(
+        "--mac-address", type=str, required=True, help="Adresse MAC du serveur"
+    )
+
+    # server arguments
+    parser.add_argument(
+        "--files-directory",
+        type=str,
+        default="files",
+        help="Répertoire des fichiers",
+    )
+    parser.add_argument(
+        "--drop-test",
+        action="store_true",
+        help="Activer le test de perte de paquets",
+    )
+    parser.add_argument(
+        "--drop-test-probability",
+        type=float,
+        default=0.05,
+        help="Probabilité de perte de paquets",
+    )
+
+    args = parser.parse_args()
+
+    server = Server(
+        args.host,
+        args.port,
+        args.mac_address,
+        args.files_directory,
+        args.drop_test,
+        args.drop_test_probability,
+    )
+    server.start()
