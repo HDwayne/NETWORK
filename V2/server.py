@@ -181,7 +181,7 @@ class Server:
             ).send(session.socket)
             return
 
-        # here we execute the file
+        print(f"[FileExecutionProtocol] Simulating execution of {file_path}")
 
         Message("EXECUTE_RESULT", content="File executed successfully.").send(
             session.socket
