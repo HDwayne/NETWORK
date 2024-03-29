@@ -41,4 +41,7 @@ class Message:
 
     def send(self, socket):
         serialized_message = self.serialize()
-        socket.send(serialized_message)
+        try:
+            socket.send(serialized_message)
+        except socket.error:
+            raise

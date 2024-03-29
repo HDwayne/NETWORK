@@ -52,6 +52,22 @@ class Client:
                     "[FileTransmissionProtocol] Déconnecté du serveur de transfert de fichier."
                 )
 
+        def _reconnect(self):
+            while True:
+                try:
+                    self._socket.connect(
+                        (self.client.server_address, self.client.server_port)
+                    )
+                    print(
+                        "[FileTransmissionProtocol] Reconnecté avec succès au serveur pour le transfert de fichier."
+                    )
+                    return True
+                except socket.error as e:
+                    print(
+                        "[FileTransmissionProtocol] Impossible de se reconnecter au serveur pour le transfert de fichier."
+                    )
+                    return False
+
         def send_file(self, file_path):
             if not self._connect():
                 return
@@ -96,14 +112,20 @@ class Client:
         def _send_upload(self, file_path):
             file_name = os.path.basename(file_path)
             file_hash = self._calculate_file_hash(file_path)
-            Message(
-                "UPLOAD", content={"file_name": file_name, "file_hash": file_hash}
-            ).send(self._socket)
+            try:
+                Message(
+                    "UPLOAD", content={"file_name": file_name, "file_hash": file_hash}
+                ).send(self._socket)
+            except socket.error:
+                self._reconnect()
             print(f"[FileTransmissionProtocol] Sent upload message for {file_name}")
 
         def _send_data(self, data, sequence_num):
             data_hash = hashlib.sha256(data).hexdigest()
-            Message("DATA", sequence_num, data, data_hash).send(self._socket)
+            try:
+                Message("DATA", sequence_num, data, data_hash).send(self._socket)
+            except socket.error:
+                self._reconnect()
             setattr(
                 self,
                 f"_timer_{sequence_num}",
@@ -115,7 +137,10 @@ class Client:
             print(f"[FileTransmissionProtocol] Sent data segment {sequence_num}")
 
         def _send_eof(self):
-            Message("EOF").send(self._socket)
+            try:
+                Message("EOF").send(self._socket)
+            except socket.error:
+                self._reconnect()
             print(f"[FileTransmissionProtocol] Sent EOF segment")
 
         def _calculate_file_hash(self, file_path):
@@ -245,7 +270,10 @@ class Client:
             if not self._connect():
                 return
 
-            Message("EXECUTE", content={"file_name": file_name}).send(self._sock)
+            try:
+                Message("EXECUTE", content={"file_name": file_name}).send(self._sock)
+            except socket.error:
+                self._disconnect()
             print(f"[FileExecutionProtocol] Sent execute message for {file_name}")
 
             buffer = b""
