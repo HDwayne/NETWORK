@@ -397,7 +397,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--compression",
         type=bool,
-        default=False,
+        default=True,
         help="Activer la compression des données",
     )
 
