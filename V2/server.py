@@ -2,6 +2,7 @@ import hashlib
 import threading
 import socket
 import os
+import zlib
 from message import Message
 import random
 import argparse
@@ -11,10 +12,11 @@ class ClientSession:
     def __init__(self, client_socket):
         self.socket = client_socket
         self.is_uploading = False
-        self.file_name = None
-        self.expected_hash = None
         self.file_data_buffer = bytearray()
         self.num_expected_acks = 0
+        self.file_hash = None
+        self.file_name = None
+        self.file_compressed = None
 
 
 class Server:
@@ -123,10 +125,11 @@ class Server:
 
     def _handle_upload(self, session, message):
         session.is_uploading = True
-        session.file_name = message.content["file_name"]
-        session.expected_hash = message.content["file_hash"]
         session.file_data_buffer.clear()
         session.num_expected_acks = 0
+        session.file_name = message.content["file_name"]
+        session.file_hash = message.content["file_hash"]
+        session.file_compressed = message.content["file_compressed"]
 
         print(f"[FileTransmissionProtocol] Receiving file: {session.file_name}")
 
@@ -145,9 +148,13 @@ class Server:
             print(f"[FileTransmissionProtocol] ACK {message.sequence_num}.")
 
     def _handle_eof(self, message, session):
+        if session.file_compressed:
+            print("[FileTransmissionProtocol] Decompressing file.")
+            session.file_data_buffer = zlib.decompress(session.file_data_buffer)
+
         received_file_hash = hashlib.sha256(session.file_data_buffer).hexdigest()
 
-        if received_file_hash == session.expected_hash:
+        if received_file_hash == session.file_hash:
             if not os.path.exists(self.FILES_DIRECTORY):
                 os.makedirs(self.FILES_DIRECTORY)
             file_path = os.path.join(self.FILES_DIRECTORY, session.file_name)

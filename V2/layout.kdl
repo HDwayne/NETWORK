@@ -1,7 +1,7 @@
 layout {
     pane split_direction="vertical" {
         pane command="python3" {
-    	    args "client.py" "--host" "localhost" "--port" "12345" "--mac-address" "B8:27:EB:F1:04:0E"
+    	    args "client.py" "--host" "localhost" "--port" "12345" "--mac-address" "B8:27:EB:F1:04:0E" "--compression" "True"
     	}
         pane command="python3" {
     	    args "server.py" "--host" "localhost" "--port" "12345" "--mac-address" "B8:27:EB:F1:04:0E"

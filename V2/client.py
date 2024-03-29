@@ -5,15 +5,17 @@ import threading
 import time
 from message import Message
 import argparse
+import zlib
 
 
 class Client:
     class FileTransmissionProtocol:
-        def __init__(self, client, window_size, segment_size, timeout):
+        def __init__(self, client, window_size, segment_size, timeout, compression):
             self.client = client
             self._window_size = window_size
             self._segment_size = segment_size
             self._timeout = timeout
+            self._compression = compression
 
             self._socket = None
             self._current_base = None
@@ -75,7 +77,10 @@ class Client:
             threading.Thread(target=self._listen_server, daemon=True).start()
 
             with open(file_path, "rb") as file:
-                segments = file.read()
+                if self._compression:
+                    segments = zlib.compress(file.read())
+                else:
+                    segments = file.read()
 
             self._segments_to_send = [
                 segments[i : i + self._segment_size]
@@ -114,7 +119,12 @@ class Client:
             file_hash = self._calculate_file_hash(file_path)
             try:
                 Message(
-                    "UPLOAD", content={"file_name": file_name, "file_hash": file_hash}
+                    "UPLOAD",
+                    content={
+                        "file_name": file_name,
+                        "file_hash": file_hash,
+                        "file_compressed": self._compression,
+                    },
                 ).send(self._socket)
             except socket.error:
                 self._reconnect()
@@ -331,9 +341,9 @@ class Client:
         self.server_port = server_port
         self.mac_address = mac_address
 
-    def send_file(self, file_path, window_size, segment_size, timeout):
+    def send_file(self, file_path, window_size, segment_size, timeout, compression):
         self.FileTransmissionProtocol(
-            self, window_size, segment_size, timeout
+            self, window_size, segment_size, timeout, compression
         ).send_file(file_path)
 
     def execute_file(self, file_name, connection_mode):
@@ -384,6 +394,12 @@ if __name__ == "__main__":
         default=2.0,
         help="Délai d'attente avant retransmission",
     )
+    parser.add_argument(
+        "--compression",
+        type=bool,
+        default=False,
+        help="Activer la compression des données",
+    )
 
     args = parser.parse_args()
     client = Client(args.host, args.port, args.mac_address)
@@ -398,7 +414,11 @@ if __name__ == "__main__":
                 print(f"File {file_path} does not exist.")
                 continue
             client.send_file(
-                file_path, args.window_size, args.segment_size, args.timeout
+                file_path,
+                args.window_size,
+                args.segment_size,
+                args.timeout,
+                args.compression,
             )
         elif command.startswith("execute"):
             _, file_name = command.split(" ")
