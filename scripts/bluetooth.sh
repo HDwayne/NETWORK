@@ -28,6 +28,13 @@ bluetoothctl system-alias $name
 echo -e "\n\nLe nom Bluetooth a été changé en '$name'"
 
 
+
+
+echo -e "\nNom de l'autre appareil à trouver :"
+read other_device_name
+
+
+
 echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
 
 (
@@ -36,21 +43,34 @@ echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
     echo -e 'scan on'
     sleep $SCAN_TIME
     echo -e 'scan off\nexit'
+
+    device_found=false
+
+    i=0 # Initialisation du compteur de tentatives
+
+    while [[ "$device_found" != true && $i -lt 5]]; do
+        ((i++))
+        # Capture la liste des appareils dans une variable
+        devices_list=$(bluetoothctl devices)
+
+        # Utilise grep pour chercher le nom spécifié dans la liste des appareils
+        # puis utilise awk pour extraire l'adresse MAC du premier appareil correspondant
+        mac_address=$(echo "$devices_list" | grep "$other_device_name" | awk '{print $2}' | head -n 1)
+
+        if [[ -z "$mac_address" ]]; then
+            sleep 2 # Attend 5 secondes avant de réessayer
+        else
+            device_found=true
+        fi
+    done
+
+
 ) | bluetoothctl > /dev/null 2>&1 &
 
 wait
 
-echo -e "\nNom de l'autre appareil à trouver :"
-read other_device_name
 
-# Capture la liste des appareils dans une variable
-devices_list=$(bluetoothctl devices)
-
-# Utilise grep pour chercher le nom spécifié dans la liste des appareils
-# puis utilise awk pour extraire l'adresse MAC du premier appareil correspondant
-mac_address=$(echo "$devices_list" | grep "$other_device_name" | awk '{print $2}' | head -n 1)
-
-if [[ -z "$mac_address" ]]; then
+if [[ "$device_found" != true ]]; then
     # Si aucun appareil correspondant n'est trouvé, affiche tous les appareils
     echo "Aucun appareil trouvé correspondant à '$other_device_name'. Appareils Bluetooth à proximité détectés :"
     echo "$devices_list"
