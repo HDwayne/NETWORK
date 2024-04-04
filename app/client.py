@@ -10,7 +10,15 @@ import zlib
 
 class Client:
     class FileTransmissionProtocol:
-        def __init__(self, client, window_size, segment_size, timeout, compression):
+        def __init__(
+            self,
+            client,
+            window_size,
+            segment_size,
+            timeout,
+            compression,
+            connection_mode,
+        ):
             self.client = client
             self._window_size = window_size
             self._segment_size = segment_size
@@ -23,29 +31,42 @@ class Client:
             self._retransmission_in_progress = False
             self._transmission_lock = threading.Lock()
             self._transmission_status = "NOT_STARTED"
+            self._connection_mode = connection_mode  # BLUETOOTH or WIFI
 
         def _connect(self):
-            self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            for attempt in range(5):
-                try:
-                    self._socket.connect(
-                        (self.client.server_address, self.client.server_port)
+            try:
+                if self._connection_mode == "BLUETOOTH":
+                    self._socket = socket.socket(
+                        socket.AF_BLUETOOTH, socket.SOCK_STREAM, socket.BTPROTO_RFCOMM
                     )
-                    print(
-                        "[FileTransmissionProtocol] Connecté avec succès au serveur pour le transfert de fichier."
-                    )
-                    return True
-                except socket.error as e:
-                    print(
-                        f"[FileTransmissionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
-                    )
-                    if attempt < 4:
-                        time.sleep(2)
-                    else:
+                else:
+                    self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                for attempt in range(5):
+                    try:
+                        if self._connection_mode == "BLUETOOTH":
+                            self._socket.connect((self.client.mac_address, 1))
+                        else:
+                            self._socket.connect(
+                                (self.client.server_address, self.client.server_port)
+                            )
                         print(
-                            "[FileTransmissionProtocol] Impossible de se connecter au serveur pour le transfert de fichier."
+                            "[FileTransmissionProtocol] Connecté avec succès au serveur pour l'exécution de commandes."
                         )
-                        return False
+                        return True
+                    except socket.error as e:
+                        print(
+                            f"[FileTransmissionProtocol] Échec de la connexion au serveur, tentative {attempt + 1}/5"
+                        )
+                        if attempt < 4:
+                            time.sleep(2)
+                        else:
+                            print(
+                                "[FileTransmissionProtocol] Impossible de se connecter au serveur pour l'exécution de commandes."
+                            )
+                            return False
+            except Exception as e:
+                print(f"Error connecting to server: {e}")
+                return False
 
         def _disconnect(self):
             if self._socket:
@@ -57,18 +78,17 @@ class Client:
         def _reconnect(self):
             while True:
                 try:
-                    self._socket.connect(
-                        (self.client.server_address, self.client.server_port)
-                    )
-                    print(
-                        "[FileTransmissionProtocol] Reconnecté avec succès au serveur pour le transfert de fichier."
-                    )
-                    return True
-                except socket.error as e:
-                    print(
-                        "[FileTransmissionProtocol] Impossible de se reconnecter au serveur pour le transfert de fichier."
-                    )
-                    return False
+                    if self._connection_mode == "BLUETOOTH":
+                        self._socket = socket.socket(
+                            socket.AF_BLUETOOTH,
+                            socket.SOCK_STREAM,
+                            socket.BTPROTO_RFCOMM,
+                        )
+                    else:
+                        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                except Exception as e:
+                    print(f"Error reconnecting to server: {e}")
+                    continue
 
         def send_file(self, file_path):
             if not self._connect():
@@ -341,9 +361,17 @@ class Client:
         self.server_port = server_port
         self.mac_address = mac_address
 
-    def send_file(self, file_path, window_size, segment_size, timeout, compression):
+    def send_file(
+        self,
+        file_path,
+        window_size,
+        segment_size,
+        timeout,
+        compression,
+        connection_mode,
+    ):
         self.FileTransmissionProtocol(
-            self, window_size, segment_size, timeout, compression
+            self, window_size, segment_size, timeout, compression, connection_mode
         ).send_file(file_path)
 
     def execute_file(self, file_name, connection_mode):
@@ -409,9 +437,16 @@ if __name__ == "__main__":
         if command == "exit":
             break
         elif command.startswith("upload"):
+            if len(command.split(" ")) != 2:
+                print("upload command requires a file path.")
+                continue
             _, file_path = command.split(" ")
             if not os.path.exists(file_path):
                 print(f"File {file_path} does not exist.")
+                continue
+            connection_mode = input("Enter connection mode (BLUETOOTH or WIFI): ")
+            if connection_mode not in ["BLUETOOTH", "WIFI"]:
+                print("Invalid connection mode")
                 continue
             client.send_file(
                 file_path,
@@ -419,8 +454,12 @@ if __name__ == "__main__":
                 args.segment_size,
                 args.timeout,
                 args.compression,
+                connection_mode,
             )
         elif command.startswith("execute"):
+            if len(command.split(" ")) != 2:
+                print("execute command requires a file name.")
+                continue
             _, file_name = command.split(" ")
             connection_mode = input("Enter connection mode (BLUETOOTH or WIFI): ")
             if connection_mode not in ["BLUETOOTH", "WIFI"]:

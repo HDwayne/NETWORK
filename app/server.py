@@ -58,7 +58,7 @@ class Server:
                         target=self._handle_client, args=(ClientSession(client_socket),)
                     )
                     client_thread.start()
-        except OSError as e:
+        except Exception as e:
             print(f"[Server WIFI] Wi-Fi error: {e}")
             exit(1)
 
@@ -78,7 +78,7 @@ class Server:
                         target=self._handle_client, args=(ClientSession(client_socket),)
                     )
                     client_thread.start()
-        except OSError as e:
+        except Exception as e:
             print(f"[Server BLUETOOTH] Bluetooth error: {e}")
             exit(1)
 
