@@ -36,6 +36,8 @@ echo -e "\n\nLe nom Bluetooth a été changé en '$name'"
 
 bluetoothctl discovarable on
 
+bluetoothctl pairable on
 
 
+echo "Bluetooth appairable"
 echo "Fin du script"
