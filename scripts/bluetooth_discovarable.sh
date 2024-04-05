@@ -34,7 +34,7 @@ bluetoothctl system-alias $name
 
 echo -e "\n\nLe nom Bluetooth a été changé en '$name'"
 
-bluetoothctl discovarable on
+bluetoothctl discoverable on
 
 bluetoothctl pairable on
 

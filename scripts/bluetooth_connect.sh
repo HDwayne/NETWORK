@@ -39,28 +39,33 @@ echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
 (
     echo -e 'scan on'
 
-    device_found=false
+) | bluetoothctl > /dev/null 2>&1 &
 
-    i=0 # Initialisation du compteur de tentatives
 
-    while [[ "$device_found" != true && $i -lt 5]]; do
-        ((i++))
-        # Capture la liste des appareils dans une variable
-        devices_list=$(bluetoothctl devices)
 
-        # Utilise grep pour chercher le nom spécifié dans la liste des appareils
-        # puis utilise awk pour extraire l'adresse MAC du premier appareil correspondant
-        mac_address=$(echo "$devices_list" | grep "$other_device_name" | awk '{print $2}' | head -n 1)
+device_found=false
 
-        if [[ -z "$mac_address" ]]; then
-            sleep 2 # Attend 5 secondes avant de réessayer
-        else
-            device_found=true
-        fi
-    done
+i=0 # Initialisation du compteur de tentatives
 
+while [[ "$device_found" != true && $i -lt $SCAN_TIME ]]; do
+    ((i++)) 
+    # Capture la liste des appareils dans une variable
+    devices_list=$(bluetoothctl devices)
+
+    # Utilise grep pour chercher le nom spécifié dans la liste des appareils
+    # puis utilise awk pour extraire l'adresse MAC du premier appareil correspondant
+    mac_address=$(echo "$devices_list" | grep "$other_device_name" | awk '{print $2}' | head -n 1)
+
+    if [[ -z "$mac_address" ]]; then
+        sleep 1 # Attend X secondes avant de réessayer
+    else
+        device_found=true
+    fi
+done
+
+
+(
     echo -e 'scan off\nexit'
-
 
 ) | bluetoothctl > /dev/null 2>&1 &
 
