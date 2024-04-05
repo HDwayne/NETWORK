@@ -3,6 +3,14 @@
 # Définition du timeout pour la recherche, en secondes
 SCAN_TIME=15
 
+# Desactivation de l'agent et du contrôleur Bluetooth
+echo -e 'power off\n' | bluetoothctl
+
+
+
+# Activation de l'agent et du contrôleur Bluetooth
+echo -e 'power on\nagent on\ndefault-agent' | bluetoothctl
+
 
 
 # Liste tous les appareils connus et extrait leurs adresses MAC
@@ -24,12 +32,6 @@ my_mac_address=$(echo "$output" | grep "Controller" | awk '{print $2}')
 
 # Affiche l'adresse MAC
 echo "L'adresse MAC du contrôleur Bluetooth est : $my_mac_address"
-
-
-
-# Activation de l'agent et du contrôleur Bluetooth
-echo -e 'power on\nagent on\ndefault-agent' | bluetoothctl
-
 
 
 echo -e "\nNom de l'autre appareil à trouver :"

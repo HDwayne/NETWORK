@@ -1,6 +1,12 @@
 #!/bin/bash
 
 
+# Desactivation de l'agent et du contrôleur Bluetooth
+echo -e 'power off\n' | bluetoothctl
+
+
+# Activation de l'agent et du contrôleur Bluetooth
+echo -e 'power on\nagent on\ndefault-agent' | bluetoothctl
 
 # Liste tous les appareils connus et extrait leurs adresses MAC
 devices=$(bluetoothctl devices | awk '{print $2}')
@@ -25,11 +31,6 @@ echo "L'adresse MAC du contrôleur Bluetooth est : $my_mac_address"
 
 #Demande le nom du reseau bluetooth
 read -p "Nom du bluetooth : " name
-
-
-
-# Activation de l'agent et du contrôleur Bluetooth
-echo -e 'power on\nagent on\ndefault-agent' | bluetoothctl
 
 
 
