@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Définition du timeout pour la recherche, en secondes
-SCAN_TIME=15
+SCAN_TIME=120
 
 # Desactivation de l'agent et du contrôleur Bluetooth
 echo -e 'power off\n' | bluetoothctl
@@ -41,13 +41,8 @@ read other_device_name
 
 echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
 
-#Sous-shell pour le scan
-(
-    echo -e 'scan on'
-
-) | bluetoothctl > /dev/null 2>&1 &
-
-
+bluetoothctl scan on &
+#echo -e 'scan on' | bluetoothctl
 
 device_found=false
 
@@ -71,14 +66,9 @@ while [[ "$device_found" != true && $i -lt $SCAN_TIME ]]; do
     fi
 done
 
+#bluetoothctl scan off &
+echo -e 'scan off' | bluetoothctl
 
-#Sous-shell pour exit le scan
-(
-    echo -e 'scan off\nexit'
-
-) | bluetoothctl > /dev/null 2>&1 &
-
-wait
 
 
 if [[ "$device_found" != true ]]; then
@@ -97,28 +87,31 @@ fi
 echo "Connexion en cours à l'appareil avec l'adresse MAC : $mac_address"
 
 
-# Appairage avec le périphérique
-echo -e "pair $mac_address" | bluetoothctl
+#bluetoothctl pair $mac_address &
 
-pair_output=$(echo -e "pair $mac_address" | bluetoothctl)
+#sleep 5
+bluetoothctl connect $mac_address
 
-sleep 5
 
 # Vérifie si l'appairage a réussi
-if echo "$pair_output" | grep -q "Pairing successful"; then
+#if echo "$pair_output" | grep -q "Pairing successful"; then
     # Connexion au périphérique
-    echo -e "connect $mac_address" | bluetoothctl
+#    bluetoothctl connect $mac_address &
 
     # Affichage de l'état de la connexion
-    echo -e "info $mac_address" | bluetoothctl
+#    echo -e "info $mac_address" | bluetoothctl
 
 
-    echo -e "\n\n Mon adresse : $my_mac_address"
-    echo -e "\n Connecter à l'adresse $mac_address"
-else
-    echo "Impossible d'appairer la raspberry, tester une autre fois."
-fi
+#    echo -e "\n\n Mon adresse : $my_mac_address"
+#    echo -e "\n Connecter à l'adresse $mac_address"
+#else
+#    echo "Impossible d'appairer la raspberry, tester une autre fois."
+#fi
 
 
 
 echo "Fin du script"
+
+sleep 5
+
+exec bash
