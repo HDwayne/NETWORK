@@ -61,7 +61,8 @@ Ensuite, suivez les instructions à l'écran pour envoyer des fichiers ou exécu
 
 ## Protocole de Transfert de Fichier (FileTransmissionProtocol)
 
-Ce protocole, inspiré par le protocole Go-Back-N, gère le transfert de fichiers du client vers le serveur  :
+Ce protocole, inspiré par le protocole Go-Back-N, gère le transfert de fichiers du client vers le serveur.
+mode de transfert possible : Wi-Fi ou Bluetooth.
 
 ### Déroulement
 
