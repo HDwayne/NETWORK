@@ -110,3 +110,45 @@ Ce protocole permet au client de demander l'exécution d'un fichier spécifique 
 - **EXECUTE_ACK** : Accusé de réception envoyé par le serveur, confirmant la prise en charge de la demande d'exécution.
 - **EXECUTE_ERROR** : Message d'erreur envoyé par le serveur si l'exécution ne peut pas être réalisée, avec des détails sur l'erreur.
 - **EXECUTE_RESULT** : Résultat de l'exécution envoyé par le serveur au client, incluant les données de sortie de l'exécution ou la confirmation de succès.
+
+# Scripts de Configuration Réseau et Bluetooth
+
+## Fichiers Inclus
+
+- **bluetooth_connect.sh** : Script pour connecter un appareil à un autre appareil Bluetooth par son nom.
+- **bluetooth_discovarable.sh** : Script pour rendre un appareil Bluetooth découvrable par d'autres.
+- **wifi_adhoc_init.py** : Programme Python pour détecter le canal le moins utilisé pour une connexion ad hoc et exécuter le script `adhoc.sh` avec ce canal.
+- **adhoc.sh** : Script pour configurer une connexion réseau ad hoc.
+
+## Prérequis
+
+- Système Linux avec Bluetooth et support réseau ad hoc.
+- Permissions suffisantes pour exécuter des commandes `sudo`.
+
+## Utilisation
+
+### Configuration Bluetooth
+
+#### Connexion à un appareil Bluetooth
+
+1. Ouvrez un terminal.
+2. Rendez le script exécutable : `chmod +x bluetooth_connect.sh`
+3. Exécutez le script : `./bluetooth_connect.sh`
+4. Suivez les instructions à l'écran pour trouver et se connecter à l'appareil désiré.
+
+#### Rendre l'appareil Découvrable
+
+1. Ouvrez un terminal.
+2. Rendez le script exécutable : `chmod +x bluetooth_discovarable.sh`
+3. Exécutez le script : `./bluetooth_discovarable.sh`
+4. Votre appareil est maintenant découvrable pour la durée spécifiée dans le script.
+
+### Configuration du Réseau Ad Hoc
+
+#### Initialisation
+
+1. Ouvrez un terminal.
+2. Rendez les scripts exécutables : 
+   - `chmod +x adhoc.sh`
+3. Exécutez le programme Python : `python wifi_adhoc_init.py`
+4. Le programme détecte le canal le moins utilisé, puis exécute `adhoc.sh` pour configurer le réseau ad hoc.
