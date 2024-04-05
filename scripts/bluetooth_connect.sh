@@ -3,30 +3,29 @@
 # Définition du timeout pour la recherche, en secondes
 SCAN_TIME=15
 
+
+# Lance bluetoothctl, puis utilise des commandes pour lister et supprimer les appareils
+bluetoothctl << EOF
+devices | grep Device | cut -d ' ' -f 2 | while read mac; do remove $mac; done
+exit
+EOF
+
+echo "Tous les appareils appairés ont été supprimés."
+
+
 # Execute bluetoothctl show` et capture la sortie
 output=$(bluetoothctl show)
 
 # Utilise `grep` pour trouver la ligne contenant "Controller" et ensuite `awk` pour extraire l'adresse MAC
-mac_address=$(echo "$output" | grep "Controller" | awk '{print $2}')
+my_mac_address=$(echo "$output" | grep "Controller" | awk '{print $2}')
 
 # Affiche l'adresse MAC
-echo "L'adresse MAC du contrôleur Bluetooth est : $mac_address"
-
-#Demande le nom du reseau bluetooth
-read -p "Nom du bluetooth : " name
+echo "L'adresse MAC du contrôleur Bluetooth est : $my_mac_address"
 
 
 
 # Activation de l'agent et du contrôleur Bluetooth
 echo -e 'power on\nagent on\ndefault-agent' | bluetoothctl
-
-
-
-bluetoothctl system-alias $name
-
-
-echo -e "\n\nLe nom Bluetooth a été changé en '$name'"
-
 
 
 
@@ -38,11 +37,7 @@ read other_device_name
 echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
 
 (
-    # Exécute bluetoothctl et redirige toute sortie vers /dev/null
-    bluetoothctl discoverable on
     echo -e 'scan on'
-    sleep $SCAN_TIME
-    echo -e 'scan off\nexit'
 
     device_found=false
 
@@ -63,6 +58,8 @@ echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
             device_found=true
         fi
     done
+
+    echo -e 'scan off\nexit'
 
 
 ) | bluetoothctl > /dev/null 2>&1 &
@@ -86,18 +83,26 @@ fi
 echo "Connexion en cours à l'appareil avec l'adresse MAC : $mac_address"
 
 
-# Mise en confiance du périphérique
-#echo -e "trust $mac_address" | bluetoothctl
-
 # Appairage avec le périphérique
 echo -e "pair $mac_address" | bluetoothctl
 
-# Connexion au périphérique
-echo -e "connect $mac_address" | bluetoothctl
+pair_output=$(echo -e "pair $MAC_RPi2" | bluetoothctl)
 
-# Affichage de l'état de la connexion
-echo -e "info $mac_address" | bluetoothctl
+# Vérifie si l'appairage a réussi
+if echo "$pair_output" | grep -q "Pairing successful"; then
+    # Connexion au périphérique
+    echo -e "connect $mac_address" | bluetoothctl
+
+    # Affichage de l'état de la connexion
+    echo -e "info $mac_address" | bluetoothctl
 
 
-echo -e "\n\n Connecter à l'adresse $mac_address"
+    echo -e "\n\n Mon adresse : $my_mac_address"
+    echo -e "\n Connecter à l'adresse $mac_address"
+else
+    echo "Failed to pair with Raspberry Pi 2. Please check the device and try again."
+fi
+
+
+
 echo "Fin du script"
