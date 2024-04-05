@@ -86,6 +86,7 @@ class Client:
                         )
                     else:
                         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    return
                 except Exception as e:
                     print(f"Error reconnecting to server: {e}")
                     continue
