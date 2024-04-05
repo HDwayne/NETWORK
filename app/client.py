@@ -95,7 +95,8 @@ class Client:
             if not self._connect():
                 return
             self._transmission_status = "IN_PROGRESS"
-            threading.Thread(target=self._listen_server, daemon=True).start()
+            thread = threading.Thread(target=self._listen_server, daemon=True)
+            thread.start()
 
             with open(file_path, "rb") as file:
                 if self._compression:
@@ -134,6 +135,8 @@ class Client:
             self._segments_to_send = None
             print(f"Transmission status: {self._transmission_status}")
             self._disconnect()
+
+            thread.join()
 
         def _send_upload(self, file_path):
             file_name = os.path.basename(file_path)
@@ -204,7 +207,8 @@ class Client:
 
         def _listen_server(self):
             buffer = b""
-            while True:
+            allow_running = True
+            while allow_running:
                 try:
                     data = self._socket.recv(2048)
                     if not data:
@@ -240,14 +244,17 @@ class Client:
                             elif ack_message.type == "EOF_ACK":
                                 print("[Server] EOF ACK")
                                 self._transmission_status = "SUCCESS"
+                                allow_running = False
                             elif ack_message.type == "EOF_NACK":
                                 print(f"[Server] EOF NACK : {ack_message.content}")
                                 self._transmission_status = "FAILED"
+                                allow_running = False
                         else:
                             break
                 except Exception as e:
                     print(f"Error listening for messages: {e}")
                     break
+            print("[FileTransmissionProtocol] Server listener stopped.")
 
     class FileExecutionProtocol:
         def __init__(self, client, connection_mode):
