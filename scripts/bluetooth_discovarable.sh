@@ -1,13 +1,17 @@
 #!/bin/bash
 
 
-# Lance bluetoothctl, puis utilise des commandes pour lister et supprimer les appareils
-bluetoothctl << EOF
-devices | grep Device | cut -d ' ' -f 2 | while read mac; do remove $mac; done
-exit
-EOF
 
-echo "Tous les appareils appairés ont été supprimés."
+# Liste tous les appareils connus et extrait leurs adresses MAC
+devices=$(bluetoothctl devices | awk '{print $2}')
+
+# Boucle sur chaque adresse MAC et supprime l'appareil
+for mac in $devices; do
+    echo "Suppression de l'appareil : $mac"
+    echo -e "remove $mac" | bluetoothctl
+done
+
+echo "Tous les appareils connus ont été supprimés."
 
 
 # Execute bluetoothctl show` et capture la sortie

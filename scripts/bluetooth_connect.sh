@@ -4,14 +4,17 @@
 SCAN_TIME=15
 
 
-# Lance bluetoothctl, puis utilise des commandes pour lister et supprimer les appareils
-bluetoothctl << EOF
-devices | grep Device | cut -d ' ' -f 2 | while read mac; do remove $mac; done
-exit
-EOF
 
-echo "Tous les appareils appairés ont été supprimés."
+# Liste tous les appareils connus et extrait leurs adresses MAC
+devices=$(bluetoothctl devices | awk '{print $2}')
 
+# Boucle sur chaque adresse MAC et supprime l'appareil
+for mac in $devices; do
+    echo "Suppression de l'appareil : $mac"
+    echo -e "remove $mac" | bluetoothctl
+done
+
+echo "Tous les appareils connus ont été supprimés."
 
 # Execute bluetoothctl show` et capture la sortie
 output=$(bluetoothctl show)
@@ -36,6 +39,7 @@ read other_device_name
 
 echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
 
+#Sous-shell pour le scan
 (
     echo -e 'scan on'
 
@@ -47,6 +51,8 @@ device_found=false
 
 i=0 # Initialisation du compteur de tentatives
 
+
+#Boucle while pour que tant que le device n'est pas trouvé, il continue de scanner 
 while [[ "$device_found" != true && $i -lt $SCAN_TIME ]]; do
     ((i++)) 
     # Capture la liste des appareils dans une variable
@@ -64,6 +70,7 @@ while [[ "$device_found" != true && $i -lt $SCAN_TIME ]]; do
 done
 
 
+#Sous-shell pour exit le scan
 (
     echo -e 'scan off\nexit'
 
@@ -91,7 +98,9 @@ echo "Connexion en cours à l'appareil avec l'adresse MAC : $mac_address"
 # Appairage avec le périphérique
 echo -e "pair $mac_address" | bluetoothctl
 
-pair_output=$(echo -e "pair $MAC_RPi2" | bluetoothctl)
+pair_output=$(echo -e "pair $mac_address" | bluetoothctl)
+
+sleep 5
 
 # Vérifie si l'appairage a réussi
 if echo "$pair_output" | grep -q "Pairing successful"; then
@@ -105,7 +114,7 @@ if echo "$pair_output" | grep -q "Pairing successful"; then
     echo -e "\n\n Mon adresse : $my_mac_address"
     echo -e "\n Connecter à l'adresse $mac_address"
 else
-    echo "Failed to pair with Raspberry Pi 2. Please check the device and try again."
+    echo "Impossible d'appairer la raspberry, tester une autre fois."
 fi
 
 
