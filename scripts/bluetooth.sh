@@ -41,8 +41,6 @@ echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
     # Exécute bluetoothctl et redirige toute sortie vers /dev/null
     bluetoothctl discoverable on
     echo -e 'scan on'
-    sleep $SCAN_TIME
-    echo -e 'scan off\nexit'
 
     device_found=false
 
@@ -63,6 +61,8 @@ echo -e "\nDébut du scan pendant $SCAN_TIME secondes"
             device_found=true
         fi
     done
+
+    echo -e 'scan off\nexit'
 
 
 ) | bluetoothctl > /dev/null 2>&1 &
@@ -86,11 +86,19 @@ fi
 echo "Connexion en cours à l'appareil avec l'adresse MAC : $mac_address"
 
 
-# Mise en confiance du périphérique
-#echo -e "trust $mac_address" | bluetoothctl
-
 # Appairage avec le périphérique
 echo -e "pair $mac_address" | bluetoothctl
+
+pair_output=$(echo -e "pair $MAC_RPi2" | bluetoothctl)
+
+# Vérifie si l'appairage a réussi
+if echo "$pair_output" | grep -q "Pairing successful"; then
+    echo "Pairing with Raspberry Pi 2 succeeded."
+    echo -e "trust $MAC_RPi2\nconnect $MAC_RPi2" | bluetoothctl
+else
+    echo "Failed to pair with Raspberry Pi 2. Please check the device and try again."
+fi
+
 
 # Connexion au périphérique
 echo -e "connect $mac_address" | bluetoothctl
@@ -100,4 +108,7 @@ echo -e "info $mac_address" | bluetoothctl
 
 
 echo -e "\n\n Connecter à l'adresse $mac_address"
+
+
+
 echo "Fin du script"
