@@ -17,7 +17,7 @@ output=$(bluetoothctl show)
 my_mac_address=$(echo "$output" | grep "Controller" | awk '{print $2}')
 
 # Affiche l'adresse MAC
-echo "L'adresse MAC du contrôleur Bluetooth est : $mac_address"
+echo "L'adresse MAC du contrôleur Bluetooth est : $my_mac_address"
 
 #Demande le nom du reseau bluetooth
 read -p "Nom du bluetooth : " name
